@@ -30,7 +30,7 @@ jobs:
           cd backend
           python -m pytest
 
-      # -------- Frontend tests --------
+      # -------- Frontend build check --------
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -42,10 +42,9 @@ jobs:
           npm ci
 
       - name: Frontend build check
-  run: |
-    cd frontend
-    npm run build
-
+        run: |
+          cd frontend
+          npm run build
 
       # -------- Docker + ECR --------
       - name: Configure AWS credentials
@@ -89,4 +88,3 @@ jobs:
             --cluster devops-cluster \
             --service backend-service \
             --force-new-deployment
-

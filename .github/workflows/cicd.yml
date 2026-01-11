@@ -1,0 +1,92 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -------- Backend tests --------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          python -m pytest
+
+      # -------- Frontend tests --------
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run frontend E2E tests
+        run: |
+          cd frontend
+          npx playwright install --with-deps
+          npx playwright test
+
+      # -------- Docker + ECR --------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker images
+        run: |
+          TAG=${{ github.sha }}
+
+          docker build -t backend:$TAG backend
+          docker tag backend:$TAG 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/backend:$TAG
+          docker push 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/backend:$TAG
+
+          docker build -t frontend:$TAG frontend
+          docker tag frontend:$TAG 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/frontend:$TAG
+          docker push 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/frontend:$TAG
+
+  deploy:
+    needs: build-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster devops-cluster \
+            --service backend-service \
+            --force-new-deployment
+

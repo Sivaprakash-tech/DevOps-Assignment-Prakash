@@ -5,26 +5,27 @@ on:
     branches:
       - develop
       - main
-  pull_request:
-    branches:
-      - develop
-      - main
+
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_BACKEND_REPO: backend-app
+  ECR_FRONTEND_REPO: frontend-app
+  AWS_ACCOUNT_ID: 769392325585
 
 jobs:
   build-test:
-    name: Build & Test
     runs-on: ubuntu-latest
 
     steps:
-      # ---------------- Checkout ----------------
+      # ---------- Checkout ----------
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ---------------- Backend Tests ----------------
+      # ---------- Backend Tests ----------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install backend dependencies
         run: |
@@ -34,25 +35,25 @@ jobs:
       - name: Run backend tests
         run: |
           cd backend
-          pytest
+          PYTHONPATH=. pytest
 
-      # ---------------- Frontend Build ----------------
+      # ---------- Frontend Build ----------
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install frontend dependencies
         run: |
           cd frontend
           npm ci
 
-      - name: Frontend build
+      - name: Frontend build check
         run: |
           cd frontend
           npm run build
 
-      # ---------------- AWS Auth ----------------
+      # ---------- AWS Auth ----------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -63,23 +64,22 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ---------------- Docker Build & Push ----------------
+      # ---------- Docker Build & Push ----------
       - name: Build and push Docker images
         run: |
           TAG=${{ github.sha }}
 
-          echo "Building backend image..."
+          # Backend
           docker build -t backend:$TAG backend
-          docker tag backend:$TAG 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/devops-backend:$TAG
-          docker push 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/devops-backend:$TAG
+          docker tag backend:$TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_BACKEND_REPO:$TAG
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_BACKEND_REPO:$TAG
 
-          echo "Building frontend image..."
+          # Frontend
           docker build -t frontend:$TAG frontend
-          docker tag frontend:$TAG 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/frontend-app:$TAG
-          docker push 769392325585.dkr.ecr.ap-southeast-2.amazonaws.com/frontend-app:$TAG
+          docker tag frontend:$TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_FRONTEND_REPO:$TAG
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_FRONTEND_REPO:$TAG
 
   deploy:
-    name: Deploy to ECS
     needs: build-test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

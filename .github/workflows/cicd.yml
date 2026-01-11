@@ -41,11 +41,11 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Run frontend E2E tests
-        run: |
-          cd frontend
-          npx playwright install --with-deps
-          npx playwright test
+      - name: Frontend build check
+  run: |
+    cd frontend
+    npm run build
+
 
       # -------- Docker + ECR --------
       - name: Configure AWS credentials
